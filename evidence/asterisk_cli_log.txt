@@ -1,0 +1,12 @@
+=== CONFBRIDGE LIST ===
+Conference Bridge Name           Users  Marked Locked Muted
+================================ ====== ====== ====== =====
+1                                     1      0 No     No
+=== CONFBRIDGE LIST 1 ===
+Channel                        Flags  User Profile     Bridge Profile   Menu             CallerID
+============================== ====== ================ ================ ================ ================
+PJSIP/1002-00000001                   bezny_uzivatel   moje_konference  moje_menu        1002
+=== CONFBRIDGE MENU ===
+Name: moje_menu
+*1=toggle_mute
+*2=leave_conference
