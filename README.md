@@ -34,9 +34,18 @@ services:
     image: andrius/asterisk:latest
     container_name: voip-asterisk
     network_mode: host
-    restart: unless-stopped
+    ports:
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+      - "10000-10020:10000-10020/udp"
     volumes:
-      - ./asterisk/config:/etc/asterisk
+      - ./asterisk/config/pjsip.conf:/etc/asterisk/pjsip.conf:z
+      - ./asterisk/config/extensions.conf:/etc/asterisk/extensions.conf:z
+      - ./asterisk/config/confbridge.conf:/etc/asterisk/confbridge.conf:z
+      - ./asterisk/config/rtp.conf:/etc/asterisk/rtp.conf:z
+      - ./asterisk/config/musiconhold.conf:/etc/asterisk/musiconhold.conf:z
+      - ./asterisk/moh:/var/lib/asterisk/moh:z
+
 ```
 
 ---
