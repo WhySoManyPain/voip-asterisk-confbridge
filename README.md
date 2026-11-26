@@ -9,18 +9,12 @@ Projekt demonstruje konferenční místnost `ConfBridge` na klapce `8000` s para
 * **2 účastníci v místnosti (`1001` + `1002`):** Hudba při čekání se vypne a oba účastníci spolu komunikují v konferenčním mostu.
 * **Odchod 2. účastníka (`1002`):** Prvnímu účastníkovi (`1001`) se opět automaticky spustí hudba při čekání.
 
-| Komponenta | Role | SIP účet / Klapka | Lokální UDP port |
-| :--- | :--- | :--- | :--- | :--- |
-| **Asterisk PBX (Docker)** | VoIP ústředna (`network_mode: host`) | `8000` (ConfBridge) | `5060` (RTP `10000–10020`)
-| **Linphone 6.2.5 (AppImage)** | Softphone 1 (hlavní účastník) | `1001` (heslo `voip1001`) | `5064` |
-| **Twinkle 1.11.0** | Softphone 2 (druhý účastník) | `1002` (heslo `voip1002`) | `5062` |
 
-
-| Komponenta | Role | SIP účet / Klapka | Lokální UDP port | Zvukové rozhraní |
+| Komponenta | Role | SIP účet / Klapka | Lokální UDP port | 
 | :--- | :--- | :--- | :--- | :--- |
-| **Asterisk PBX (Docker)** | VoIP ústředna (`network_mode: host`) | `8000` (ConfBridge), `8001` (Echo) | `5060` (RTP `10000–10020`) | — |
-| **Linphone 6.2.5 (AppImage)** | Softphone 1 (hlavní účastník) | `1001` (heslo `voip1001`) | `5064` | `PulseAudio: EarPods` |
-| **Twinkle 1.11.0** | Softphone 2 (druhý účastník) | `1002` (heslo `voip1002`) | `5062` | `ALSA: default` (PipeWire) |
+| **Asterisk PBX (Docker)** | VoIP ústředna (`network_mode: host`) | `8000` (ConfBridge), `8001` (Echo) | `5060` (RTP `10000–10020`) |
+| **Linphone 6.2.5 (AppImage)** | Softphone 1 (hlavní účastník) | `1001` (heslo `voip1001`) | `5064` | 
+| **Twinkle 1.11.0** | Softphone 2 (druhý účastník) | `1002` (heslo `voip1002`) | `5062` | 
 ---
 
 ## 1. Vytvoření struktury projektu a Docker kontejneru
