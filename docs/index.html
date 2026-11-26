@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VoIP ústředna Asterisk v Dockeru – ConfBridge &amp; MoH</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #0f172a;
+      --muted: #475569;
+      --primary: #2563eb;
+      --primary-light: #eff6ff;
+      --border: #e2e8f0;
+      --code-bg: #1e293b;
+      --code-text: #f8fafc;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    header {
+      background: linear-gradient(135deg, #0f172a, #1e3a8a);
+      color: #ffffff;
+      padding: 3rem 1.5rem;
+      text-align: center;
+    }
+    header h1 { margin: 0 0 0.5rem; font-size: 2rem; }
+    header p { margin: 0 auto; max-width: 680px; color: #cbd5e1; }
+    nav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0.75rem 1rem;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+    }
+    nav a {
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.92rem;
+    }
+    nav a:hover { color: var(--primary); }
+    main {
+      max-width: 960px;
+      margin: 2rem auto;
+      padding: 0 1.25rem 3rem;
+    }
+    section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.75rem;
+      margin-bottom: 1.5rem;
+    }
+    h2 {
+      margin-top: 0;
+      border-bottom: 2px solid var(--primary-light);
+      padding-bottom: 0.4rem;
+      color: #1e3a8a;
+    }
+    h3 { margin-bottom: 0.4rem; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+    .card strong { display: block; color: var(--primary); margin-bottom: 0.25rem; }
+    pre {
+      background: var(--code-bg);
+      color: var(--code-text);
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 0.88rem;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    p code, td code, li code {
+      background: var(--primary-light);
+      color: #1d4ed8;
+      padding: 0.15rem 0.35rem;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.75rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.65rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    th { background: var(--bg); font-weight: 600; }
+    .diagram-wrap {
+      overflow-x: auto;
+      text-align: center;
+      margin: 1rem 0;
+    }
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.88rem;
+      padding-bottom: 2rem;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>VoIP ústředna Asterisk v Dockeru</h1>
+  <p>Dokumentace nasazení SIP ústředny Asterisk 23 s konferenčním můstkem ConfBridge, hudbou při čekání (Music on Hold), nahráváním hovorů a interaktivním DTMF menu.</p>
+</header>
+
+<nav>
+  <a href="#prehled">Přehled</a>
+  <a href="#architektura">Architektura</a>
+  <a href="#konfigurace">Konfigurace</a>
+  <a href="#dtmf">DTMF menu</a>
+  <a href="#nasazeni">Spuštění a testy</a>
+  <a href="#problemy">Řešení problémů</a>
+</nav>
+
+<main>
+  <section id="prehled">
+    <h2>1. Přehled projektu</h2>
+    <p>Cílem projektu je realizace funkční lokální VoIP telefonní ústředny v izolovaném kontejnerovém prostředí Docker na operačním systému Fedora Linux. Ústředna zajišťuje registraci SIP klientů a provozuje konferenční místnost na klapce <code>8000</code>.</p>
+    <div class="grid">
+      <div class="card">
+        <strong>SIP &amp; PJSIP</strong>
+        Registrace interních linek <code>1001</code> a <code>1002</code> pomocí moderního modulu <code>res_pjsip</code>.
+      </div>
+      <div class="card">
+        <strong>ConfBridge (klapka 8000)</strong>
+        Víceúčastnická hlasová konference s řízením hlasitosti a ztlumením mikrofonu.
+      </div>
+      <div class="card">
+        <strong>Music on Hold (MoH)</strong>
+        Automatické přehrávání hudby (<code>test_moh.wav</code>), pokud je v místnosti pouze jeden účastník.
+      </div>
+      <div class="card">
+        <strong>Nahrávání konference</strong>
+        Záznam průběhu celého konferenčního hovoru pomocí <code>MixMonitor</code> do WAV souboru.
+      </div>
+    </div>
+  </section>
+
+  <section id="architektura">
+    <h2>2. Síťová architektura</h2>
+    <p>Kontejner <code>voip-asterisk</code> využívá režim <code>network_mode: host</code>, díky kterému nedochází k překladu adres (NAT) u dynamických RTP portů a hlasové pakety proudí přímo mezi softwarovými telefony Twinkle a ústřednou na rozhraní <code>127.0.0.1</code>.</p>
+    <div class="diagram-wrap">
+      <svg width="760" height="250" viewBox="0 0 760 250" xmlns="http://www.w3.org/2000/svg">
+        <rect x="10" y="10" width="740" height="230" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+        <text x="28" y="36" font-family="sans-serif" font-size="13" font-weight="bold" fill="#475569">Hostitelský OS: Fedora Linux (127.0.0.1)</text>
+
+        <rect x="35" y="60" width="190" height="65" rx="8" fill="#ffffff" stroke="#2563eb" stroke-width="2"/>
+        <text x="130" y="88" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold" fill="#0f172a">Twinkle – Linka 1001</text>
+        <text x="130" y="108" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#475569">SIP klient (ALSA / PipeWire)</text>
+
+        <rect x="35" y="145" width="190" height="65" rx="8" fill="#ffffff" stroke="#2563eb" stroke-width="2"/>
+        <text x="130" y="173" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold" fill="#0f172a">Twinkle – Linka 1002</text>
+        <text x="130" y="193" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#475569">SIP klient (ALSA / PipeWire)</text>
+
+        <line x1="225" y1="92" x2="385" y2="115" stroke="#2563eb" stroke-width="2"/>
+        <line x1="225" y1="177" x2="385" y2="155" stroke="#2563eb" stroke-width="2"/>
+        <text x="305" y="88" text-anchor="middle" font-family="monospace" font-size="11" fill="#1e3a8a">SIP UDP 5060</text>
+        <text x="305" y="192" text-anchor="middle" font-family="monospace" font-size="11" fill="#1e3a8a">RTP UDP 10000-10020</text>
+
+        <rect x="390" y="55" width="335" height="165" rx="10" fill="#eff6ff" stroke="#1d4ed8" stroke-width="2"/>
+        <text x="557" y="82" text-anchor="middle" font-family="sans-serif" font-size="15" font-weight="bold" fill="#1e3a8a">Docker: voip-asterisk (Asterisk 23.5)</text>
+        <text x="557" y="102" text-anchor="middle" font-family="monospace" font-size="12" fill="#334155">network_mode: host</text>
+
+        <rect x="415" y="118" width="285" height="82" rx="6" fill="#ffffff" stroke="#93c5fd"/>
+        <text x="557" y="140" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="bold" fill="#0f172a">ConfBridge Místnost 1 (Klapka 8000)</text>
+        <text x="557" y="160" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#475569">MoH: /var/lib/asterisk/moh/test_moh.wav</text>
+        <text x="557" y="178" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#475569">Záznam: /tmp/konference_nahravka.wav</text>
+      </svg>
+    </div>
+  </section>
+
+  <section id="konfigurace">
+    <h2>3. Struktura a konfigurační soubory</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Soubor v repozitáři</th>
+          <th>Cesta v kontejneru</th>
+          <th>Účel</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>docker-compose.yml</code></td>
+          <td>—</td>
+          <td>Definice kontejneru <code>andrius/asterisk:latest</code>, hostitelské sítě a svazků (volumes).</td>
+        </tr>
+        <tr>
+          <td><code>asterisk/config/pjsip.conf</code></td>
+          <td><code>/etc/asterisk/pjsip.conf</code></td>
+          <td>UDP transport na portu <code>5060</code>, šablony endpointů a účty <code>1001</code>, <code>1002</code>.</td>
+        </tr>
+        <tr>
+          <td><code>asterisk/config/extensions.conf</code></td>
+          <td><code>/etc/asterisk/extensions.conf</code></td>
+          <td>Číslovací plán směrující klapku <code>8000</code> do aplikace <code>ConfBridge</code>.</td>
+        </tr>
+        <tr>
+          <td><code>asterisk/config/confbridge.conf</code></td>
+          <td><code>/etc/asterisk/confbridge.conf</code></td>
+          <td>Profil mostu (nahrávání), uživatele (MoH při prázdné místnosti) a DTMF menu.</td>
+        </tr>
+        <tr>
+          <td><code>asterisk/config/musiconhold.conf</code></td>
+          <td><code>/etc/asterisk/musiconhold.conf</code></td>
+          <td>Definice třídy <code>default</code> čtoucí WAV soubory z <code>/var/lib/asterisk/moh</code>.</td>
+        </tr>
+        <tr>
+          <td><code>asterisk/config/rtp.conf</code></td>
+          <td><code>/etc/asterisk/rtp.conf</code></td>
+          <td>Vymezení rozsahu UDP portů <code>10000–10020</code> pro přenos hlasu (RTP).</td>
+        </tr>
+        <tr>
+          <td><code>asterisk/moh/test_moh.wav</code></td>
+          <td><code>/var/lib/asterisk/moh/test_moh.wav</code></td>
+          <td>Zvukový soubor (8 kHz, mono, 16-bit PCM WAV) pro hudbu při čekání.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="dtmf">
+    <h2>4. Ovládání konference pomocí DTMF</h2>
+    <p>Během hovoru na klapce <code>8000</code> mohou účastníci ovládat konferenci pomocí tónové volby (DTMF v režimu <code>rfc4733</code>):</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Klávesa</th>
+          <th>Akce v Asterisku</th>
+          <th>Popis funkce</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>*</code></td>
+          <td><code>playback_and_continue(conf-username)</code></td>
+          <td>Přehraje výzvu a pokračuje v hovoru.</td>
+        </tr>
+        <tr>
+          <td><code>*1</code></td>
+          <td><code>toggle_mute</code></td>
+          <td>Ztlumí nebo znovu zapne mikrofon účastníka.</td>
+        </tr>
+        <tr>
+          <td><code>*2</code></td>
+          <td><code>leave_conference</code></td>
+          <td>Ukončí účast a opustí konferenční místnost.</td>
+        </tr>
+        <tr>
+          <td><code>*3</code></td>
+          <td><code>increase_listening_volume</code></td>
+          <td>Zvýší hlasitost příchozího zvuku z konference.</td>
+        </tr>
+        <tr>
+          <td><code>*4</code></td>
+          <td><code>decrease_listening_volume</code></td>
+          <td>Sníží hlasitost příchozího zvuku z konference.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="nasazeni">
+    <h2>5. Postup spuštění a ověření</h2>
+    <h3>Spuštění ústředny</h3>
+    <pre><code>git clone https://github.com/&lt;uzivatel&gt;/voip-asterisk-confbridge.git
+cd voip-asterisk-confbridge
+sudo docker compose up -d</code></pre>
+
+    <h3>Ověření stavu v Asterisk CLI</h3>
+    <pre><code>sudo docker exec voip-asterisk asterisk -rx "pjsip show endpoints"
+sudo docker exec voip-asterisk asterisk -rx "moh show files"
+sudo docker exec voip-asterisk asterisk -rx "confbridge list"</code></pre>
+
+    <h3>Testovací scénář v klientu Twinkle (chování Music on Hold)</h3>
+    <ol>
+      <li>Vytvořte profily <code>1001</code> (Linka 1) a <code>1002</code> (Linka 2) s doménou <code>127.0.0.1</code> a zvukovým výstupem nastaveným na <code>ALSA: pipewire</code> nebo <code>ALSA: default</code>.</li>
+      <li><strong>První účastník v místnosti:</strong> Na Lince 1 (<code>1001</code>) vytočte číslo <code>8000</code>. Protože je účastník v konferenci sám (<code>music_on_hold_when_empty=yes</code>), okamžitě se mu začne přehrávat hudba při čekání (MoH).</li>
+      <li><strong>Připojení druhého účastníka:</strong> Na Lince 2 (<code>1002</code>) rovněž vytočte číslo <code>8000</code>. Jakmile se linka <code>1002</code> připojí do konference, zvuk hudby při čekání automaticky přestane hrát a oba účastníci spolu mohou hovořit.</li>
+      <li><strong>Odpojení jednoho z účastníků:</strong> Jakmile se linka <code>1001</code> z hovoru odpojí (zavěsí Linku 1), v konferenční místnosti zůstane opět jen jeden účastník – na Lince 2 (<code>1002</code>) proto automaticky znovu začne hrát zvuk hudby při čekání, dokud se nepřipojí další volající nebo hovor neukončí.</li>
+      <li>Během hovoru otestujte ztlumení mikrofonu pomocí <code>*1</code> a opuštění konference přes <code>*2</code>.</li>
+    </ol>
+  </section>
+
+  <section id="problemy">
+    <h2>6. Řešení technických problémů při nasazení</h2>
+    <ul>
+      <li><strong>Chyba 503 Service Unavailable (IPv4 vs. IPv6):</strong> Fedora překládá <code>localhost</code> na IPv6 (<code>::1</code>), zatímco PJSIP poslouchá na IPv4 (<code>0.0.0.0</code>). Vyřešeno nastavením domény <code>127.0.0.1</code> v klientu Twinkle.</li>
+      <li><strong>Jednosměrný zvuk / ticho v hovoru:</strong> Docker port-forwarding způsoboval ztrátu RTP paketů na zpětné smyčce. Přepnutí kontejneru na <code>network_mode: host</code> a doplnění <code>rtp_symmetric=yes</code> zajistilo obousměrný přenos hlasu.</li>
+      <li><strong>Oprávnění SELinux na Fedoře:</strong> Připojované soubory v <code>docker-compose.yml</code> byly označeny příznakem <code>:z</code>, aby k nim proces Asterisk uvnitř kontejneru získal korektní přístup.</li>
+    </ul>
+  </section>
+</main>
+
+<footer>
+  VoIP projekt – Asterisk ConfBridge &amp; Docker &bull; Dokumentace publikována přes GitHub Pages
+</footer>
+
+</body>
+</html>
