@@ -11,3 +11,5 @@ services:
       - ./asterisk/config/extensions.conf:/etc/asterisk/extensions.conf:z
       - ./asterisk/config/confbridge.conf:/etc/asterisk/confbridge.conf:z
       - ./asterisk/config/rtp.conf:/etc/asterisk/rtp.conf:z
+      - ./asterisk/config/musiconhold.conf:/etc/asterisk/musiconhold.conf:z
+      - ./asterisk/moh:/var/lib/asterisk/moh:z
