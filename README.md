@@ -9,7 +9,7 @@ Projekt demonstruje konferenční místnost `ConfBridge` na klapce `8000` s para
 * **2 účastníci v místnosti (`1001` + `1002`):** Hudba při čekání se vypne a oba účastníci spolu komunikují v konferenčním mostu.
 * **Odchod 2. účastníka (`1002`):** Prvnímu účastníkovi (`1001`) se opět automaticky spustí hudba při čekání.
 
-| Komponenta | Role | SIP účet / Klapka | Lokální UDP port | Zvukové rozhraní |
+| Komponenta | Role | SIP účet / Klapka | Lokální UDP port | 
 | :--- | :--- | :--- | :--- | :--- |
 | **Asterisk PBX (Docker)** | VoIP ústředna (`network_mode: host`) | `8000` (ConfBridge) | `5060` (RTP `10000–10020`)
 | **Linphone 6.2.5 (AppImage)** | Softphone 1 (hlavní účastník) | `1001` (heslo `voip1001`) | `5064` | 
@@ -44,75 +44,91 @@ services:
 ## 2. Konfigurační soubory ústředny Asterisk (`asterisk/config/`)
 
 ### `pjsip.conf` – SIP transport a registrace linek `1001` a `1002`
-Definice UDP transportu na portu `5060` a dvou koncových bodů (`1001`, `1002`) s kodeky `ulaw` a `alaw`:
+Definice UDP transportu a dvou koncových bodů (`1001`, `1002`) s kodeky `ulaw` a `alaw`:
 
 ```ini
 [transport-udp]
 type=transport
 protocol=udp
-bind=0.0.0.0:5060
+bind=0.0.0.0
 
-[1001]
+
+[endpoint-tpl](!)
 type=endpoint
 context=internal
 disallow=all
-allow=ulaw,alaw
-auth=1001-auth
+allow=ulaw
+allow=alaw
+direct_media=no
+dtmf_mode=rfc4733
+rtp_symmetric=yes
+force_rport=yes
+rewrite_contact=yes
+
+
+[auth-tpl](!)
+type=auth
+auth_type=userpass
+
+[aor-tpl](!)
+type=aor
+max_contacts=1
+remove_existing=yes
+
+[1001](endpoint-tpl)
+auth=auth1001
 aors=1001
-
-[1001-auth]
-type=auth
-auth_type=userpass
-password=voip1001
+[auth1001](auth-tpl)
 username=1001
+password=voip1001
+[1001](aor-tpl)
 
-[1001]
-type=aor
-max_contacts=1
-remove_existing=yes
-
-[1002]
-type=endpoint
-context=internal
-disallow=all
-allow=ulaw,alaw
-auth=1002-auth
+[1002](endpoint-tpl)
+auth=auth1002  
 aors=1002
-
-[1002-auth]
-type=auth
-auth_type=userpass
-password=voip1002
+[auth1002](auth-tpl)
 username=1002
+password=voip1002
+[1002](aor-tpl)
 
-[1002]
-type=aor
-max_contacts=1
-remove_existing=yes
 ```
+### `musiconhold.conf` – Výběr hudby pro čekání na připojení druhého učastníka
+
+```ini
+[default]
+mode=files
+directory=/var/lib/asterisk/moh/
+``` 
 
 ### `confbridge.conf` – Konferenční místnost, nahrávání a hudba při čekání
-Zapnutí automatického nahrávání (`record_conference=yes`), hudby při čekání osamoceného účastníka (`music_on_hold_when_empty=yes`) a DTMF nabídky (`*1` ztlumení mikrofonu, `*2` opuštění konference):
+Zapnutí automatického nahrávání (`record_conference=yes`), zapnutí hudby při čekání osamoceného účastníka (`music_on_hold_when_empty=yes`) a DTMF nabídka:
 
 ```ini
 [general]
 
-[default_bridge]
+[moje_konference]
+  
 type=bridge
+; Nahrávání konference
+
 record_conference=yes
 record_file=/tmp/konference_nahravka.wav
 
-[default_user]
+[uzivatel]
 type=user
+; Hudba při čekání na spojení (MoH)
 music_on_hold_when_empty=yes
 music_on_hold_class=default
 announce_join_leave=no
-dtmf_passthrough=yes
 
-[default_menu]
+[moje_menu]
 type=menu
+; Dynamické menu DTMF
+*=playback_and_continue(conf-username)
 *1=toggle_mute
 *2=leave_conference
+*3=increase_listening_volume
+*4=decrease_listening_volume
 ```
 
 ### `extensions.conf` – Číslovací plán (Dialplan)
@@ -120,19 +136,10 @@ Směrování přímých hovorů mezi linkami `1001` a `1002`, vstupu do konferen
 
 ```ini
 [internal]
-exten => 1001,1,Dial(PJSIP/1001,30)
- same => n,Hangup()
-
-exten => 1002,1,Dial(PJSIP/1002,30)
- same => n,Hangup()
-
 exten => 8000,1,Answer()
- same => n,ConfBridge(8000,default_bridge,default_user,default_menu)
+ same => n,ConfBridge(1,moje_konference,uzivatel,moje_menu)
  same => n,Hangup()
 
-exten => 8001,1,Answer()
- same => n,Echo()
- same => n,Hangup()
 ```
 
 ### `rtp.conf`, `cdr.conf` a `cdr_csv.conf` – Mediální porty a logování hovorů
@@ -184,83 +191,29 @@ sudo docker exec voip-asterisk asterisk -rx "pjsip show endpoints"
 
 ---
 
-## 4. Kontrola a nastavení audia na Fedoře (PipeWire + Apple EarPods USB-C)
-
-Výpis hardwarových karet v ALSA a aktivních zvukových zařízení v PipeWire:
-
-```bash
-aplay -l && arecord -l
-wpctl status | grep -A 15 "Audio"
-```
-
-Odtlumení mikrofonu USB-C sluchátek EarPods v PipeWire a nastavení hlasitosti na 100 %:
-
-```bash
-wpctl set-mute @DEFAULT_AUDIO_SOURCE@ 0
-wpctl set-volume @DEFAULT_AUDIO_SOURCE@ 1.0
-wpctl get-volume @DEFAULT_AUDIO_SOURCE@
-```
-
-Odemčení a zesílení hardwarového ovládání mikrofonu přímo na zvukové kartě sluchátek (`card 1`) přes `amixer`:
-
-```bash
-command -v amixer >/dev/null || sudo dnf install -y alsa-utils
-for ctrl in $(amixer -c 1 scontrols | sed -n "s/Simple mixer control '\([^']*\)'.*/\1/p"); do
-  amixer -c 1 sset "$ctrl" 100% unmute cap 2>/dev/null || amixer -c 1 sset "$ctrl" 100% unmute 2>/dev/null
-done
-amixer -c 1
-```
-
-Testovací 3sekundový záznam z mikrofonu EarPods přes PipeWire a kontrola úrovně signálu:
-
-```bash
-pw-record --target=@DEFAULT_AUDIO_SOURCE@ /tmp/earpods_test.wav &
-PID=$!; sleep 3; kill $PID
-paplay /tmp/earpods_test.wav
-```
-
----
 
 ## 5. Nastavení dvou souběžných softphone klientů
 
 Aby oba klienti běželi současně bez konfliktu o port `5060` (obsazený Asteriskem) a bez automatického přidržení hovoru, používá každý klient vlastní lokální SIP port.
 
 ### Softphone 1: Linphone 6.2.5 AppImage (Linka `1001`, port `5064`)
-Vyhledání staženého AppImage, změna lokálního portu na `5064` v konfiguračních souborech Linphone a spuštění aplikace:
+Stažení a spuštění aplikace Linphone:
 
 ```bash
-which linphone 2>/dev/null || flatpak list --app | grep -i linphone || find ~ -maxdepth 3 -iname "*linphone*" 2>/dev/null
-killall -9 Linphone-6.2.5-x86_64.AppImage linphone 2>/dev/null || true
-
-python3 -c '
-import os, re
-for path in [os.path.expanduser("~/.config/linphone/linphone.conf"), os.path.expanduser("~/.config/linphone/linphonerc")]:
-    if os.path.exists(path):
-        txt = open(path, encoding="utf-8").read()
-        if "[sip]" in txt:
-            txt = re.sub(r"(?m)^sip_port=.*", "sip_port=5064", txt)
-            if "sip_port=5064" not in txt:
-                txt = txt.replace("[sip]\n", "[sip]\nsip_port=5064\n", 1)
-        else:
-            txt += "\n[sip]\nsip_port=5064\n"
-        open(path, "w", encoding="utf-8").write(txt)
-'
-
 chmod +x ~/Downloads/Linphone-6.2.5-x86_64.AppImage
-~/Downloads/Linphone-6.2.5-x86_64.AppImage &
+~/Downloads/Linphone-6.2.5-x86_64.AppImage 
 ```
 
 Nastavení v rozhraní Linphone:
 1. **Přihlášení účtu:** Username `1001`, Password `voip1001`, Domain `127.0.0.1`, Transport `UDP`.
-2. **Settings → Audio:** Playback device `PulseAudio: EarPods Analog Stereo`, Capture device `PulseAudio: EarPods Mono`.
+
 
 ### Softphone 2: Twinkle (Linka `1002`, port `5062`)
-Nastavení lokálního portu `5062` a sdíleného zvukového rozhraní `alsa:default` (aby neblokoval USB kartu sluchátek pro Linphone):
+Stažení a spuštění Twinkle
 
 ```bash
-killall twinkle 2>/dev/null || true
-sed -i 's/^dev_ringtone=.*/dev_ringtone=alsa:default/; s/^dev_speaker=.*/dev_speaker=alsa:default/; s/^dev_mic=.*/dev_mic=alsa:default/; s/^sip_port=.*/sip_port=5062/' ~/.twinkle/twinkle.sys
-twinkle &
+sudo dnf install twinkle
+twinkle 
 ```
 
 Nastavení v rozhraní Twinkle:
@@ -271,7 +224,7 @@ Nastavení v rozhraní Twinkle:
 ## 6. Průběh testu a diagnostika RTP provozu
 
 1. **Vstup 1. účastníka:** Z **Linphone (`1001`)** vytočit `8000` → ve sluchátkách se ozve hudba při čekání (*Music on Hold*).
-2. **Vstup 2. účastníka:** Z **Twinkle (`1002`)** vytočit `8000` → hudba při čekání se zastaví a hlas z mikrofonu EarPods se přenáší do konference a nahrává.
+2. **Vstup 2. účastníka:** Z **Twinkle (`1002`)** vytočit `8000` → hudba při čekání se zastaví a hlas z mikrofonu  se přenáší do konference a nahrává.
 3. **Odchod 2. účastníka:** V **Twinkle (`1002`)** hovor zavěsit → v **Linphone (`1001`)** se hudba při čekání opět automaticky spustí.
 4. **Ukončení testu:** V **Linphone (`1001`)** hovor zavěsit → Asterisk uzavře WAV záznam konference a zapíše záznamy hovorů do `Master.csv`.
 
