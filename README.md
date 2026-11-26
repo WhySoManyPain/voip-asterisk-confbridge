@@ -15,6 +15,12 @@ Projekt demonstruje konferenční místnost `ConfBridge` na klapce `8000` s para
 | **Linphone 6.2.5 (AppImage)** | Softphone 1 (hlavní účastník) | `1001` (heslo `voip1001`) | `5064` |
 | **Twinkle 1.11.0** | Softphone 2 (druhý účastník) | `1002` (heslo `voip1002`) | `5062` |
 
+
+| Komponenta | Role | SIP účet / Klapka | Lokální UDP port | Zvukové rozhraní |
+| :--- | :--- | :--- | :--- | :--- |
+| **Asterisk PBX (Docker)** | VoIP ústředna (`network_mode: host`) | `8000` (ConfBridge), `8001` (Echo) | `5060` (RTP `10000–10020`) | — |
+| **Linphone 6.2.5 (AppImage)** | Softphone 1 (hlavní účastník) | `1001` (heslo `voip1001`) | `5064` | `PulseAudio: EarPods` |
+| **Twinkle 1.11.0** | Softphone 2 (druhý účastník) | `1002` (heslo `voip1002`) | `5062` | `ALSA: default` (PipeWire) |
 ---
 
 ## 1. Vytvoření struktury projektu a Docker kontejneru
